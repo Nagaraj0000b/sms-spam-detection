@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMS Spam Detector</title>
+    <!-- 1. Load Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+    <div class="w-full max-w-2xl bg-white p-8 rounded-lg shadow-lg">
+        
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-2">ML Project: Spam Detector</h1>
+        <p class="text-center text-gray-600 mb-6">Enter a new message to see if the model thinks it's "Spam" or "Ham".</p>
+        
+        <!-- Input Text Area -->
+        <div class="mb-4">
+            <label for="message-input" class="block text-sm font-medium text-gray-700 mb-2">New Message:</label>
+            <textarea
+                id="message-input"
+                rows="5"
+                class="w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                placeholder="e.g., 'URGENT! You have won a 1 week FREE membership...'"
+            ></textarea>
+        </div>
+
+        <!-- Predict Button -->
+        <button 
+            id="predict-button"
+            class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-md shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition duration-150 ease-in-out"
+        >
+            Analyze Message
+        </button>
+
+        <!-- Result Display -->
+        <div id="result-container" class="mt-8 p-6 rounded-lg hidden">
+            <h2 id="result-label" class="text-2xl font-bold text-center mb-2"></h2>
+            <p id="result-confidence" class="text-lg text-center"></p>
+        </div>
+
+    </div>
+
+    <!-- 
+      FIX: MOVED SCRIPT BLOCK 1 (DEFINITION) UP
+      We now define initApp() *before* we load the script that calls it.
+      This prevents the race condition.
+    -->
+    <script>
+        // We wrap our entire application logic in an initApp() function.
+        function initApp() {
+            // Get our UI elements
+            const inputEl = document.getElementById('message-input');
+            const buttonEl = document.getElementById('predict-button');
+            const resultContainerEl = document.getElementById('result-container');
+            const resultLabelEl = document.getElementById('result-label');
+            const resultConfidenceEl = document.getElementById('result-confidence');
+
+            // Store our loaded model data in easier-to-access variables
+            const VOCAB = modelData.vocabulary;
+            const COEFFICIENTS = modelData.coefficients;
+            const INTERCEPT = modelData.intercept;
+            const STOPWORDS = new Set(modelData.stopwords);
+            const VOCAB_SIZE = 5000; // Must match max_features
+
+            // Add click event to the button
+            buttonEl.addEventListener('click', () => {
+                const text = inputEl.value;
+                if (!text) {
+                    // Use a simple pop-up if no text is entered
+                    const resultContainer = document.getElementById('result-container');
+                    const resultLabel = document.getElementById('result-label');
+                    const resultConfidence = document.getElementById('result-confidence');
+                    
+                    resultLabel.textContent = "Error";
+                    resultLabel.className = "text-3xl font-bold text-center text-yellow-800";
+                    resultConfidence.textContent = "Please enter a message to analyze.";
+                    resultConfidence.className = "text-lg text-center text-yellow-800";
+                    resultContainer.className = "mt-8 p-6 rounded-lg bg-yellow-100"; // Show and style the container
+                    return;
+                }
+
+                // --- This is our ML pipeline in JavaScript ---
+                // 1. Preprocess the text
+                const processedText = processText(text);
+                
+                // 2. Vectorize the text (simulate CountVectorizer)
+                const featureVector = getFeatureVector(processedText);
+                
+                // 3. Get prediction (simulate LogisticRegression)
+                const prediction = getPrediction(featureVector);
+                
+                // 4. Show the result
+                displayResult(prediction);
+            });
+
+            /**
+             * 1. PREPROCESSING
+             * This function matches our Python 'process_text_simple'
+             */
+            function processText(text) {
+                // 1. Lowercase
+                text = text.toLowerCase();
+                
+                // 2. Remove punctuation (using a simple regex)
+                text = text.replace(new RegExp('[!"#$%&\\\'()*+,-./:;<=>?@[\\]^_`{|}~]', 'g'), '');
+                
+                // 3. Remove stopwords
+                const words = text.split(' ');
+                const filteredWords = words.filter(word => !STOPWORDS.has(word));
+                
+                return filteredWords.join(' ');
+            }
+
+            /**
+             * 2. VECTORIZATION (Unigrams Only)
+             * This function simulates `CountVectorizer.transform()`
+             */
+            function getFeatureVector(text) {
+                // Create a vector of all zeros
+                let vector = new Array(VOCAB_SIZE).fill(0);
+                
+                let words = text.split(' ');
+                
+                // Count unigrams (single words)
+                for (const word of words) {
+                    if (VOCAB.hasOwnProperty(word)) {
+                        const index = VOCAB[word];
+                        // Ensure index is within bounds, just in case
+                        if(index >= 0 && index < VOCAB_SIZE) {
+                            vector[index]++;
+                        }
+                    }
+                }
+                
+                return vector;
+            }
+
+            /**
+             * 3. PREDICTION
+             * This function simulates `LogisticRegression.predict_proba()`
+             */
+            function getPrediction(vector) {
+                // Calculate the dot product
+                let score = INTERCEPT;
+                for (let i = 0; i < vector.length; i++) {
+                    if (vector[i] > 0) { // Optimization: only calculate if word exists
+                        score += vector[i] * COEFFICIENTS[i];
+                    }
+                }
+                
+                // Apply the sigmoid function [Image of sigmoid function]
+                const probability = 1 / (1 + Math.exp(-score));
+                
+                return {
+                    isSpam: probability > 0.5,
+                    confidence: probability
+                };
+            }
+
+            /**
+             * 4. DISPLAY RESULT
+             * This updates the UI
+             */
+            function displayResult(prediction) {
+                let label, confidence, bgColor, textColor;
+
+                if (prediction.isSpam) {
+                    label = "SPAM";
+                    confidence = (prediction.confidence * 100).toFixed(2);
+                    bgColor = 'bg-red-100';
+                    textColor = 'text-red-800';
+                } else {
+                    label = "HAM";
+                    confidence = ((1 - prediction.confidence) * 100).toFixed(2);
+                    bgColor = 'bg-green-100';
+                    textColor = 'text-green-800';
+                }
+
+                resultLabelEl.textContent = label;
+                resultLabelEl.className = `text-3xl font-bold text-center ${textColor}`;
+                
+                resultConfidenceEl.textContent = `Confidence: ${confidence}%`;
+                resultConfidenceEl.className = `text-lg text-center ${textColor}`;
+                
+                resultContainerEl.className = `mt-8 p-6 rounded-lg ${bgColor}`; // Make it visible
+            }
+
+        } // End of initApp()
+    </script>
+
+    <!-- 
+      FIX: MOVED SCRIPT BLOCK 2 (CALLER) DOWN
+      Now we load the model_data.js file. When its 'onload' event fires,
+      the initApp() function is guaranteed to exist.
+    -->
+    <script src="model_data.js" onload="initApp()"></script>
+
+</body>
+</html>
